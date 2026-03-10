@@ -346,8 +346,8 @@ export default function App() {
   const [exIdx, setExIdx] = useState(0);
   const [sessionScore, setSessionScore] = useState({ correct: 0, total: 0 });
   const [allTimeStats, setAllTimeStats] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("male_stats") || "null"); } catch { return null; }
-  } ?? { totalExercises: 0, totalCorrect: 0, byType: {}, streak: 0, bestStreak: 0, lastDate: null, sessions: 0 });
+    try { return JSON.parse(localStorage.getItem("male_stats") || "null") ?? { totalExercises: 0, totalCorrect: 0, byType: {}, streak: 0, bestStreak: 0, lastDate: null, sessions: 0 }; } catch { return { totalExercises: 0, totalCorrect: 0, byType: {}, streak: 0, bestStreak: 0, lastDate: null, sessions: 0 }; }
+  });
   const [motivation, setMotivation] = useState(getMotivation());
   const [showHint, setShowHint] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
@@ -416,7 +416,7 @@ export default function App() {
 
   // ── Screens ──
   return (
-    <div style={{ minHeight: "100vh", minHeight: "100dvh", background: "#0c0f1a", color: "#e2e8f0", fontFamily: "var(--sans)", overflow: "auto" }}>
+    <div style={{ minHeight: "100dvh", background: "#0c0f1a", color: "#e2e8f0", fontFamily: "var(--sans)", overflow: "auto" }}>
       <style>{`
         :root {
           --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
