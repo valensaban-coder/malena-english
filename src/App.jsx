@@ -25,6 +25,15 @@ function shuffle(arr) {
   return a;
 }
 
+const DIFFICULTY_ORDER = { B1: 0, B2: 1, C1: 2 };
+
+function sortByDifficulty(arr) {
+  const shuffled = shuffle(arr);
+  return shuffled.sort((a, b) =>
+    (DIFFICULTY_ORDER[a.difficulty] ?? 1) - (DIFFICULTY_ORDER[b.difficulty] ?? 1)
+  );
+}
+
 function getMotivation() {
   return MOTIVATIONS[Math.floor(Math.random() * MOTIVATIONS.length)];
 }
@@ -340,7 +349,7 @@ function ResultBanner({ result, hint }) {
 //  MAIN APP
 // ═══════════════════════════════════════
 export default function App() {
-  const [screen, setScreen] = useState("home"); // home | type | exercise | stats
+  const [screen, setScreen] = useState("home"); // home | exercise | results | stats | empty
   const [selectedType, setSelectedType] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [exIdx, setExIdx] = useState(0);
@@ -351,15 +360,31 @@ export default function App() {
   const [motivation, setMotivation] = useState(getMotivation());
   const [showHint, setShowHint] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
+  const [seenExercises, setSeenExercises] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("male_seen") || "{}"); } catch { return {}; }
+  });
 
-  // Save stats
   useEffect(() => {
     try { localStorage.setItem("male_stats", JSON.stringify(allTimeStats)); } catch {}
   }, [allTimeStats]);
 
+  useEffect(() => {
+    try { localStorage.setItem("male_seen", JSON.stringify(seenExercises)); } catch {}
+  }, [seenExercises]);
+
   const startExercises = (type) => {
-    const shuffled = shuffle(type.data).slice(0, type.id === "reading" ? type.data.length : 8);
-    setExercises(shuffled);
+    const BATCH = type.id === "reading" ? type.data.length : 10;
+    const seenIds = new Set(seenExercises[type.id] || []);
+    let pool = type.data.filter(ex => !seenIds.has(ex.id));
+
+    if (pool.length < Math.min(BATCH, 3)) {
+      setSelectedType(type);
+      setScreen("empty");
+      return;
+    }
+
+    const sorted = sortByDifficulty(pool).slice(0, BATCH);
+    setExercises(sorted);
     setExIdx(0);
     setSessionScore({ correct: 0, total: 0 });
     setCurrentStreak(0);
@@ -374,7 +399,11 @@ export default function App() {
       if (exIdx + 1 < exercises.length) {
         setExIdx(i => i + 1);
       } else {
-        // Session complete
+        // Session complete — mark exercises as seen
+        setSeenExercises(prev => ({
+          ...prev,
+          [selectedType.id]: [...(prev[selectedType.id] || []), ...exercises.map(e => e.id)],
+        }));
         setAllTimeStats(prev => {
           const typeStat = prev.byType[selectedType.id] || { done: 0, correct: 0 };
           return {
@@ -396,7 +425,7 @@ export default function App() {
       if (correct) setCurrentStreak(s => s + 1);
       else setCurrentStreak(0);
     }
-  }, [exIdx, exercises.length, selectedType, sessionScore, currentStreak]);
+  }, [exIdx, exercises, selectedType, sessionScore, currentStreak]);
 
   const currentExercise = exercises[exIdx];
 
@@ -438,7 +467,7 @@ export default function App() {
       {screen === "home" && (
         <div style={{ padding: "0 20px 40px", maxWidth: 560, margin: "0 auto" }}>
           {/* Header */}
-          <div style={{ padding: "48px 0 24px", textAlign: "center" }} className="fade-up">
+          <div style={{ paddingTop: "max(48px, calc(env(safe-area-inset-top) + 24px))", paddingBottom: "24px", textAlign: "center" }} className="fade-up">
             <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #e879a033, #c0395e22)", border: "2px solid #e879a044", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 28 }}>🩺</div>
             <h1 style={{ fontSize: 28, fontFamily: "var(--serif)", color: "#2d0e18", marginBottom: 4, fontWeight: 400 }}>
               Hey, Male! 👋
@@ -498,7 +527,7 @@ export default function App() {
       {screen === "exercise" && selectedType && (
         <div style={{ padding: "0 20px 40px", maxWidth: 600, margin: "0 auto" }}>
           {/* Top bar */}
-          <div style={{ padding: "16px 0", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ paddingTop: "max(28px, calc(env(safe-area-inset-top) + 12px))", paddingBottom: "16px", display: "flex", alignItems: "center", gap: 12 }}>
             <button onClick={() => setScreen("home")} style={{ background: "none", border: "none", color: "#b07888", cursor: "pointer", fontSize: 14, fontFamily: "var(--sans)", padding: "6px 0" }}>← Back</button>
             <div style={{ flex: 1 }} />
             <div style={{ fontSize: 12, color: selectedType.color, fontFamily: "var(--mono)", fontWeight: 600 }}>
@@ -581,7 +610,7 @@ export default function App() {
       {/* ═══ STATS SCREEN ═══ */}
       {screen === "stats" && (
         <div style={{ padding: "0 20px 40px", maxWidth: 560, margin: "0 auto" }}>
-          <div style={{ padding: "16px 0" }}>
+          <div style={{ paddingTop: "max(28px, calc(env(safe-area-inset-top) + 12px))", paddingBottom: "16px" }}>
             <button onClick={() => setScreen("home")} style={{ background: "none", border: "none", color: "#b07888", cursor: "pointer", fontSize: 14, fontFamily: "var(--sans)" }}>← Back</button>
           </div>
 
@@ -631,6 +660,23 @@ export default function App() {
           <button onClick={() => { if (confirm("Reset all progress? This cannot be undone.")) { setAllTimeStats({ totalExercises: 0, totalCorrect: 0, byType: {}, streak: 0, bestStreak: 0, lastDate: null, sessions: 0 }); } }}
             style={{ width: "100%", marginTop: 24, padding: "12px", borderRadius: 10, border: "1px solid #991b1b44", background: "transparent", color: "#991b1b", fontSize: 12, cursor: "pointer", fontFamily: "var(--mono)" }}>
             Reset All Progress
+          </button>
+        </div>
+      )}
+
+      {/* ═══ EMPTY SCREEN ═══ */}
+      {screen === "empty" && selectedType && (
+        <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 32px", maxWidth: 400, margin: "0 auto", textAlign: "center" }} className="fade-up">
+          <div style={{ fontSize: 64, marginBottom: 20 }}>💌</div>
+          <h2 style={{ fontSize: 22, fontFamily: "var(--serif)", fontWeight: 400, color: "#2d0e18", marginBottom: 12, lineHeight: 1.4 }}>
+            ¡Hiciste todos los ejercicios de {selectedType.name}!
+          </h2>
+          <p style={{ fontSize: 15, color: "#b07888", lineHeight: 1.7, marginBottom: 32 }}>
+            Pedirle a Valu que cargue más ejercicios ❤️
+          </p>
+          <button onClick={() => { setScreen("home"); setMotivation(getMotivation()); }}
+            style={{ padding: "14px 32px", borderRadius: 12, border: "none", background: "linear-gradient(135deg, #e879a0, #c0395e)", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "var(--sans)" }}>
+            Volver al inicio
           </button>
         </div>
       )}
